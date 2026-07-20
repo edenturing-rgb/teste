@@ -166,10 +166,12 @@
   <div class="field">
     <label>Parede mín. (USDT)</label>
     <select id="minWallSel">
-      <option value="100000">100K</option>
-      <option value="250000" selected>250K</option>
-      <option value="500000">500K</option>
       <option value="1000000">1M</option>
+      <option value="5000000" selected>5M</option>
+      <option value="10000000">10M</option>
+      <option value="100000000">100M</option>
+      <option value="500000000">500M</option>
+      <option value="1000000000">1B</option>
     </select>
   </div>
 
@@ -246,7 +248,7 @@
     manualLo: null,
     manualHi: null,
     resPct: 0.0002,           // não usado diretamente p/ bucket (bucketing é por linha no render)
-    minWall: 250000,
+    minWall: 5000000,
     paused: false,
     book: { bids: new Map(), asks: new Map(), lastUpdateId: 0, synced: false },
     history: [],               // {t, mid, bids:[[p,q]], asks:[[p,q]]}
@@ -540,6 +542,7 @@
   }
 
   function fmtUsd(v){
+    if (v >= 1e9) return (v/1e9).toFixed(2)+'B';
     if (v >= 1e6) return (v/1e6).toFixed(2)+'M';
     if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
     return v.toFixed(0);
@@ -677,6 +680,9 @@
 
   function drawFirmWalls(plotW, plotH, hi, lo, rows, rowH){
     const now = Date.now();
+    const pxPerDollar = plotH / (hi - lo);   // escala atual do zoom
+    const mid = (hi + lo) / 2;
+
     for (const w of state.wallTracker.values()){
       const st = wallStatus(w);
       if (st.label !== 'FIRME') continue;   // só renderiza paredes que já provaram persistência
@@ -685,9 +691,14 @@
       const r = (hi - w.price) / (hi - lo) * rows;
       const y = r * rowH;
 
-      // espessura do bloco proporcional ao tamanho da parede (mín. ~1 linha, máx. ~5)
+      // espessura definida em $ (proporcional ao tamanho da parede), depois
+      // convertida pra pixels usando a escala atual — cresce com zoom in,
+      // encolhe com zoom out, exatamente como um objeto real no gráfico.
       const usd = w.price * w.qty;
-      const thickness = Math.min(5, Math.max(1.4, Math.log10(usd/1000))) * rowH;
+      const sizeTier = Math.min(4, Math.max(0.6, Math.log10(usd/1e6 + 1)));
+      const priceThickness = mid * 0.00010 * sizeTier;
+      let thickness = priceThickness * pxPerDollar;
+      thickness = Math.min(40, Math.max(1.5, thickness));
       const top = y - thickness/2;
 
       const isBid = w.side === 'bid';
