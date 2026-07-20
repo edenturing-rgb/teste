@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Regiões de Compra/Venda — Binance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a0d12;
+    --panel: #10141c;
+    --panel-2: #141a24;
+    --line: #1e2530;
+    --text: #dfe4ea;
+    --muted: #6b7686;
+    --bid: #f0a020;
+    --bid-hot: #ffe9b0;
+    --ask: #16b7c9;
+    --ask-hot: #b8f5ff;
+    --liq-sell: #ff3d81;
+    --liq-buy: #a06bff;
+    --good: #3ddc84;
+    --bad: #ff5c5c;
+    --radius: 10px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+    font-size:13px;
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  header{
+    display:flex; align-items:center; gap:18px;
+    padding:12px 18px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--panel), var(--bg));
+    flex-wrap:wrap;
+  }
+  .brand{
+    font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:16px;
+    letter-spacing:0.02em; color:var(--text); display:flex; align-items:center; gap:8px;
+  }
+  .brand .dot{ width:8px; height:8px; border-radius:50%; background:var(--ask); box-shadow:0 0 8px var(--ask); }
+  .field{ display:flex; flex-direction:column; gap:3px; }
+  .field label{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; }
+  select, input[type=text]{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:6px 9px; border-radius:6px; font-family:inherit; font-size:12px; width:110px;
+  }
+  #manualLo, #manualHi{ width:88px; }
+  input[type=range]{ width:110px; accent-color:var(--ask); }
+  .stat{ display:flex; flex-direction:column; gap:2px; margin-left:auto; text-align:right; }
+  .stat .label{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; }
+  .stat .value{ font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:20px; transition:color .2s; }
+  .status{ display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+  .status .led{ width:7px; height:7px; border-radius:50%; background:var(--bad); }
+  .status .led.on{ background:var(--good); box-shadow:0 0 6px var(--good); }
+
+  main{ flex:1; display:flex; min-height:0; }
+  .canvas-wrap{ flex:1; position:relative; min-width:0; }
+  canvas{ display:block; width:100%; height:100%; }
+  .crosshair-box{
+    position:absolute; pointer-events:none; background:var(--panel);
+    border:1px solid var(--line); border-radius:6px; padding:6px 9px;
+    font-size:11px; display:none; white-space:nowrap;
+  }
+
+  aside{
+    width:280px; border-left:1px solid var(--line); background:var(--panel);
+    display:flex; flex-direction:column; overflow-y:auto; flex-shrink:0;
+  }
+  .panel{ padding:14px 16px; border-bottom:1px solid var(--line); }
+  .panel h3{
+    margin:0 0 10px; font-family:'Space Grotesk',sans-serif; font-size:11px;
+    text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); font-weight:600;
+  }
+  .wall-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:7px 0; border-bottom:1px solid var(--line); gap:8px;
+  }
+  .wall-row:last-child{ border-bottom:none; }
+  .wall-row .px{ font-weight:600; }
+  .wall-row .usd{ color:var(--muted); font-size:11px; }
+  .tag{
+    font-size:9px; padding:2px 6px; border-radius:20px; text-transform:uppercase;
+    letter-spacing:0.04em; white-space:nowrap;
+  }
+  .tag.firm{ background:rgba(61,220,132,.15); color:var(--good); }
+  .tag.new{ background:rgba(255,255,255,.08); color:var(--muted); }
+  .tag.spoof{ background:rgba(255,92,92,.15); color:var(--bad); }
+  .tag.shrink{ background:rgba(240,160,32,.15); color:var(--bid); }
+
+  .legend-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:11px; color:var(--muted); }
+  .swatch{ width:26px; height:10px; border-radius:2px; flex-shrink:0; }
+  .grad-bid{ background:linear-gradient(90deg, rgba(240,160,32,0), var(--bid) 60%, var(--bid-hot)); }
+  .grad-ask{ background:linear-gradient(90deg, rgba(22,183,201,0), var(--ask) 60%, var(--ask-hot)); }
+  .dot-sm{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
+  .liq-feed{ display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; }
+  .liq-item{ display:flex; justify-content:space-between; font-size:11px; padding:5px 8px; border-radius:6px; background:var(--panel-2); }
+  .liq-item.sell{ border-left:2px solid var(--liq-sell); }
+  .liq-item.buy{ border-left:2px solid var(--liq-buy); }
+  .liq-item .t{ color:var(--muted); }
+  .empty-hint{ color:var(--muted); font-size:11px; line-height:1.5; }
+
+  button.pause{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:6px 12px; border-radius:6px; cursor:pointer; font-family:inherit; font-size:12px;
+  }
+  button.pause:hover{ border-color:var(--ask); }
+
+  .legend-swatches{ display:flex; gap:6px; align-items:center; }
+  .sw{ width:22px; height:14px; border-radius:3px; display:inline-block; }
+  .sw-bid{ background:linear-gradient(90deg, rgba(240,160,32,0), var(--bid) 60%, var(--bid-hot)); }
+  .sw-ask{ background:linear-gradient(90deg, rgba(22,183,201,0), var(--ask) 60%, var(--ask-hot)); }
+  .checkline{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text); cursor:pointer; user-select:none; }
+  .checkline input{ accent-color:var(--ask); width:14px; height:14px; }
+
+  .wall-block-label{ font-size:10px; fill:var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="dot" id="brandDot"></span>DEPTH//HEATMAP</div>
+
+  <div class="field">
+    <label>Símbolo</label>
+    <select id="symbolSel">
+      <option value="BTCUSDT">BTCUSDT</option>
+      <option value="ETHUSDT">ETHUSDT</option>
+      <option value="SOLUSDT">SOLUSDT</option>
+      <option value="BNBUSDT">BNBUSDT</option>
+      <option value="XRPUSDT">XRPUSDT</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label>Zoom (faixa %)</label>
+    <input type="range" id="rangeSlider" min="0.3" max="3" step="0.1" value="1.2" />
+  </div>
+
+  <div class="field">
+    <label>Preço mín ($)</label>
+    <input type="text" id="manualLo" placeholder="auto" inputmode="decimal" />
+  </div>
+
+  <div class="field">
+    <label>Preço máx ($)</label>
+    <input type="text" id="manualHi" placeholder="auto" inputmode="decimal" />
+  </div>
+
+  <div class="field">
+    <label>&nbsp;</label>
+    <button class="pause" id="clearRangeBtn" title="Voltar ao zoom automático">Auto</button>
+  </div>
+
+  <div class="field">
+    <label>Resolução</label>
+    <input type="range" id="resSlider" min="0.005" max="0.05" step="0.005" value="0.02" />
+  </div>
+
+  <div class="field">
+    <label>Parede mín. (USDT)</label>
+    <select id="minWallSel">
+      <option value="100000">100K</option>
+      <option value="250000" selected>250K</option>
+      <option value="500000">500K</option>
+      <option value="1000000">1M</option>
+    </select>
+  </div>
+
+  <div class="legend-swatches">
+    <span class="sw sw-bid" title="parede firme de compra"></span>
+    <span class="sw sw-ask" title="parede firme de venda"></span>
+  </div>
+
+  <div class="field">
+    <label>&nbsp;</label>
+    <button class="pause" id="pauseBtn">Pausar</button>
+  </div>
+
+  <div class="status">
+    <span class="led" id="wsLed"></span>
+    <span id="wsText">conectando…</span>
+  </div>
+
+  <div class="stat">
+    <span class="label">Mid price</span>
+    <span class="value" id="midValue">--</span>
+  </div>
+</header>
+
+<main>
+  <div class="canvas-wrap">
+    <canvas id="heat"></canvas>
+    <div class="crosshair-box" id="crossBox"></div>
+  </div>
+
+  <aside>
+    <div class="panel">
+      <h3>Maiores paredes — compra</h3>
+      <div id="bidWalls"><div class="empty-hint">aguardando dados…</div></div>
+    </div>
+    <div class="panel">
+      <h3>Maiores paredes — venda</h3>
+      <div id="askWalls"><div class="empty-hint">aguardando dados…</div></div>
+    </div>
+    <div class="panel">
+      <h3>Legenda</h3>
+      <div class="legend-row"><span class="swatch grad-bid"></span> intensidade de bids</div>
+      <div class="legend-row"><span class="swatch grad-ask"></span> intensidade de asks</div>
+      <div class="legend-row"><span class="dot-sm" style="background:var(--liq-sell)"></span> liquidação forçada (venda)</div>
+      <div class="legend-row"><span class="dot-sm" style="background:var(--liq-buy)"></span> liquidação forçada (compra)</div>
+      <div class="legend-row" style="margin-bottom:0"><span class="dot-sm" style="background:#fff"></span> linha de mid price</div>
+    </div>
+    <div class="panel">
+      <h3>Liquidações recentes (futuros)</h3>
+      <div class="liq-feed" id="liqFeed"><div class="empty-hint">nenhuma liquidação ainda. cascatas de stops aparecem aqui em tempo real.</div></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------------------------------------------------------------------
+  // Config & state
+  // ---------------------------------------------------------------------
+  const CONFIG = {
+    captureIntervalMs: 1000,
+    renderIntervalMs: 400,
+    historyCols: 260,          // ~4.3 min de histórico a 1s/coluna
+    captureRangePct: 0.03,     // guarda ±3% do mid em cada coluna
+    rows: 130,
+    liqLifetimeMs: 9000,
+  };
+
+  const state = {
+    symbol: "BTCUSDT",
+    rangePct: 0.012,
+    manualLo: null,
+    manualHi: null,
+    resPct: 0.0002,           // não usado diretamente p/ bucket (bucketing é por linha no render)
+    minWall: 250000,
+    paused: false,
+    book: { bids: new Map(), asks: new Map(), lastUpdateId: 0, synced: false },
+    history: [],               // {t, mid, bids:[[p,q]], asks:[[p,q]]}
+    liquidations: [],          // {t, price, side, qty}
+    depthWS: null,
+    liqWS: null,
+    lastMid: 0,
+    prevMid: 0,
+    wallTracker: new Map(),    // key "bid:price" / "ask:price" -> {firstSeen,lastSeen,qty,maxQty,flickers,absentSince}
+  };
+
+  const REST_URL = "https://api.binance.com/api/v3/depth";
+  const WS_DEPTH = sym => `wss://stream.binance.com:9443/ws/${sym.toLowerCase()}@depth@100ms`;
+  const WS_LIQ   = sym => `wss://fstream.binance.com/ws/${sym.toLowerCase()}@forceOrder`;
+
+  // ---------------------------------------------------------------------
+  // DOM refs
+  // ---------------------------------------------------------------------
+  const canvas = document.getElementById('heat');
+  const ctx = canvas.getContext('2d');
+  const crossBox = document.getElementById('crossBox');
+  const wrap = document.querySelector('.canvas-wrap');
+  const midValueEl = document.getElementById('midValue');
+  const wsLed = document.getElementById('wsLed');
+  const wsText = document.getElementById('wsText');
+  const bidWallsEl = document.getElementById('bidWalls');
+  const askWallsEl = document.getElementById('askWalls');
+  const liqFeedEl = document.getElementById('liqFeed');
+
+  document.getElementById('symbolSel').addEventListener('change', e => {
+    state.symbol = e.target.value;
+    resetAndConnect();
+  });
+  document.getElementById('rangeSlider').addEventListener('input', e => {
+    state.rangePct = parseFloat(e.target.value) / 100;
+  });
+  function applyManualRange(){
+    const loEl = document.getElementById('manualLo');
+    const hiEl = document.getElementById('manualHi');
+    const lo = parseFloat(loEl.value);
+    const hi = parseFloat(hiEl.value);
+    if (!isNaN(lo) && !isNaN(hi) && hi > lo){
+      state.manualLo = lo;
+      state.manualHi = hi;
+    }
+  }
+  document.getElementById('manualLo').addEventListener('change', applyManualRange);
+  document.getElementById('manualHi').addEventListener('change', applyManualRange);
+  document.getElementById('clearRangeBtn').addEventListener('click', () => {
+    state.manualLo = null;
+    state.manualHi = null;
+    document.getElementById('manualLo').value = '';
+    document.getElementById('manualHi').value = '';
+  });
+  document.getElementById('resSlider').addEventListener('input', e => {
+    state.resPct = parseFloat(e.target.value) / 100;
+  });
+  document.getElementById('minWallSel').addEventListener('change', e => {
+    state.minWall = parseFloat(e.target.value);
+  });
+  document.getElementById('pauseBtn').addEventListener('click', e => {
+    state.paused = !state.paused;
+    e.target.textContent = state.paused ? 'Retomar' : 'Pausar';
+  });
+
+  function resizeCanvas(){
+    const dpr = window.devicePixelRatio || 1;
+    const rect = wrap.getBoundingClientRect();
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // ---------------------------------------------------------------------
+  // Order book sync (mesmo algoritmo oficial da Binance)
+  // ---------------------------------------------------------------------
+  function applySide(map, updates){
+    for (const [pStr, qStr] of updates){
+      const p = parseFloat(pStr), q = parseFloat(qStr);
+      if (q === 0) map.delete(p); else map.set(p, q);
+    }
+  }
+
+  function applyEvent(ev){
+    const b = state.book;
+    if (ev.u <= b.lastUpdateId) return true;
+    if (!b.synced){
+      if (ev.U <= b.lastUpdateId + 1 && b.lastUpdateId + 1 <= ev.u){
+        b.synced = true;
+      } else {
+        return false;
+      }
+    } else if (ev.U !== b.lastUpdateId + 1){
+      return false;
+    }
+    applySide(b.bids, ev.b);
+    applySide(b.asks, ev.a);
+    b.lastUpdateId = ev.u;
+    return true;
+  }
+
+  async function loadSnapshot(){
+    const res = await fetch(`${REST_URL}?symbol=${state.symbol}&limit=5000`);
+    const data = await res.json();
+    state.book.lastUpdateId = data.lastUpdateId;
+    state.book.bids = new Map(data.bids.map(([p,q]) => [parseFloat(p), parseFloat(q)]));
+    state.book.asks = new Map(data.asks.map(([p,q]) => [parseFloat(p), parseFloat(q)]));
+  }
+
+  let wsBuffer = [];
+  let bufferingSnapshot = false;
+
+  function connectDepth(){
+    setWsStatus(false, 'conectando…');
+    state.book = { bids: new Map(), asks: new Map(), lastUpdateId: 0, synced: false };
+    wsBuffer = [];
+    bufferingSnapshot = true;
+
+    const ws = new WebSocket(WS_DEPTH(state.symbol));
+    state.depthWS = ws;
+
+    ws.onopen = () => { setWsStatus(true, 'ao vivo'); };
+
+    ws.onmessage = async (msg) => {
+      const ev = JSON.parse(msg.data);
+      if (bufferingSnapshot){
+        wsBuffer.push(ev);
+        if (wsBuffer.length === 1){
+          try {
+            await loadSnapshot();
+          } catch(e){
+            setWsStatus(false, 'erro no snapshot');
+            return;
+          }
+          bufferingSnapshot = false;
+          let ok = true;
+          for (const buffered of wsBuffer){
+            if (!applyEvent(buffered)) { ok = false; break; }
+          }
+          wsBuffer = [];
+          if (!ok){
+            setWsStatus(false, 'ressincronizando…');
+            ws.close();
+            setTimeout(connectDepth, 500);
+          }
+        }
+        return;
+      }
+      if (!applyEvent(ev)){
+        setWsStatus(false, 'gap — ressincronizando…');
+        ws.close();
+        setTimeout(connectDepth, 500);
+      }
+    };
+
+    ws.onclose = () => { setWsStatus(false, 'desconectado — reconectando…'); setTimeout(connectDepth, 2000); };
+    ws.onerror = () => { ws.close(); };
+  }
+
+  function connectLiquidations(){
+    if (state.liqWS) { try{ state.liqWS.close(); }catch(e){} }
+    const ws = new WebSocket(WS_LIQ(state.symbol));
+    state.liqWS = ws;
+    ws.onmessage = (msg) => {
+      const data = JSON.parse(msg.data);
+      const o = data.o;
+      if (!o) return;
+      const ev = {
+        t: Date.now(),
+        price: parseFloat(o.p),
+        side: o.S,          // "SELL" = long liquidado | "BUY" = short liquidado
+        qty: parseFloat(o.q),
+      };
+      state.liquidations.push(ev);
+      if (state.liquidations.length > 200) state.liquidations.shift();
+      pushLiquidationFeed(ev);
+    };
+    ws.onclose = () => { setTimeout(connectLiquidations, 3000); };
+    ws.onerror = () => { ws.close(); };
+  }
+
+  function setWsStatus(on, text){
+    wsLed.classList.toggle('on', on);
+    wsText.textContent = text;
+  }
+
+  function resetAndConnect(){
+    if (state.depthWS) try{ state.depthWS.close(); }catch(e){}
+    if (state.liqWS) try{ state.liqWS.close(); }catch(e){}
+    state.history = [];
+    state.liquidations = [];
+    state.wallTracker = new Map();
+    liqFeedEl.innerHTML = '<div class="empty-hint">nenhuma liquidação ainda. cascatas de stops aparecem aqui em tempo real.</div>';
+    connectDepth();
+    connectLiquidations();
+  }
+
+  // ---------------------------------------------------------------------
+  // Captura periódica de colunas p/ o heatmap
+  // ---------------------------------------------------------------------
+  function computeRange(mid){
+    if (state.manualLo != null && state.manualHi != null && state.manualHi > state.manualLo){
+      return [state.manualLo, state.manualHi];
+    }
+    return [mid * (1 - state.rangePct), mid * (1 + state.rangePct)];
+  }
+
+  function midPrice(){
+    if (state.book.bids.size === 0 || state.book.asks.size === 0) return 0;
+    let bestBid = -Infinity, bestAsk = Infinity;
+    for (const p of state.book.bids.keys()) if (p > bestBid) bestBid = p;
+    for (const p of state.book.asks.keys()) if (p < bestAsk) bestAsk = p;
+    return (bestBid + bestAsk) / 2;
+  }
+
+  function captureColumn(){
+    if (state.paused) return;
+    const mid = midPrice();
+    if (mid <= 0) return;
+
+    state.prevMid = state.lastMid || mid;
+    state.lastMid = mid;
+
+    const lo = mid * (1 - CONFIG.captureRangePct);
+    const hi = mid * (1 + CONFIG.captureRangePct);
+    const bids = [];
+    const asks = [];
+    for (const [p,q] of state.book.bids) if (p >= lo && p <= hi) bids.push([p,q]);
+    for (const [p,q] of state.book.asks) if (p >= lo && p <= hi) asks.push([p,q]);
+
+    state.history.push({ t: Date.now(), mid, bids, asks });
+    if (state.history.length > CONFIG.historyCols) state.history.shift();
+
+    updateWallTracker(mid);
+    updateHeaderStats(mid);
+    renderWallPanels();
+  }
+
+  // ---------------------------------------------------------------------
+  // Rastreamento de persistência de paredes (mesma lógica do script python)
+  // ---------------------------------------------------------------------
+  function updateWallTracker(mid){
+    const now = Date.now();
+    const grace = 15000;
+    const seenNow = new Set();
+
+    const scan = (side, map) => {
+      for (const [p,q] of map){
+        const usd = p*q;
+        if (usd < state.minWall) continue;
+        const key = side+':'+p;
+        seenNow.add(key);
+        let w = state.wallTracker.get(key);
+        if (!w){
+          w = { firstSeen: now, lastSeen: now, qty:q, maxQty:q, flickers:0, absentSince:null, price:p, side };
+          state.wallTracker.set(key, w);
+        } else {
+          if (w.absentSince !== null){ w.flickers++; w.absentSince = null; }
+          w.lastSeen = now; w.qty = q; w.maxQty = Math.max(w.maxQty, q);
+        }
+      }
+    };
+    scan('bid', state.book.bids);
+    scan('ask', state.book.asks);
+
+    for (const [key, w] of state.wallTracker){
+      if (!seenNow.has(key)){
+        if (w.absentSince === null) w.absentSince = now;
+        else if (now - w.absentSince > grace) state.wallTracker.delete(key);
+      }
+    }
+  }
+
+  function wallStatus(w){
+    const age = Date.now() - w.firstSeen;
+    const stability = w.maxQty > 0 ? w.qty / w.maxQty : 0;
+    if (w.flickers >= 3) return {label:'PISCA', cls:'spoof'};
+    if (age < 60000) return {label:'NOVA', cls:'new'};
+    if (stability < 0.5) return {label:'ENCOLHE', cls:'shrink'};
+    if (age >= 180000) return {label:'FIRME', cls:'firm'};
+    return {label:'observ.', cls:'new'};
+  }
+
+  function fmtAge(ms){
+    const s = Math.floor(ms/1000);
+    if (s < 60) return s+'s';
+    if (s < 3600) return Math.floor(s/60)+'m'+String(s%60).padStart(2,'0')+'s';
+    return Math.floor(s/3600)+'h'+String(Math.floor((s%3600)/60)).padStart(2,'0')+'m';
+  }
+
+  function fmtUsd(v){
+    if (v >= 1e6) return (v/1e6).toFixed(2)+'M';
+    if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+    return v.toFixed(0);
+  }
+
+  function renderWallPanels(){
+    const bids = [], asks = [];
+    for (const w of state.wallTracker.values()){
+      (w.side === 'bid' ? bids : asks).push(w);
+    }
+    bids.sort((a,b) => (b.price*b.qty) - (a.price*a.qty));
+    asks.sort((a,b) => (b.price*b.qty) - (a.price*a.qty));
+
+    const renderList = (el, list) => {
+      if (list.length === 0){
+        el.innerHTML = '<div class="empty-hint">nenhuma parede acima do mínimo configurado ainda.</div>';
+        return;
+      }
+      el.innerHTML = list.slice(0,5).map(w => {
+        const st = wallStatus(w);
+        return `<div class="wall-row">
+          <div>
+            <div class="px">${w.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+            <div class="usd">${fmtUsd(w.price*w.qty)} USDT · ${fmtAge(Date.now()-w.firstSeen)}</div>
+          </div>
+          <span class="tag ${st.cls}">${st.label}</span>
+        </div>`;
+      }).join('');
+    };
+    renderList(bidWallsEl, bids);
+    renderList(askWallsEl, asks);
+  }
+
+  function updateHeaderStats(mid){
+    midValueEl.textContent = mid.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    if (state.prevMid){
+      midValueEl.style.color = mid > state.prevMid ? 'var(--good)' : mid < state.prevMid ? 'var(--bad)' : 'var(--text)';
+    }
+  }
+
+  function pushLiquidationFeed(ev){
+    const hint = liqFeedEl.querySelector('.empty-hint');
+    if (hint) liqFeedEl.innerHTML = '';
+    const div = document.createElement('div');
+    div.className = 'liq-item ' + (ev.side === 'SELL' ? 'sell' : 'buy');
+    const label = ev.side === 'SELL' ? 'LONG liquidado (venda forçada)' : 'SHORT liquidado (compra forçada)';
+    div.innerHTML = `<span>${label}</span><span class="t">${ev.price.toFixed(2)} · ${fmtUsd(ev.price*ev.qty)}</span>`;
+    liqFeedEl.prepend(div);
+    while (liqFeedEl.children.length > 30) liqFeedEl.removeChild(liqFeedEl.lastChild);
+  }
+
+  // ---------------------------------------------------------------------
+  // Render do heatmap
+  // ---------------------------------------------------------------------
+  const VIRIDIS_STOPS = [
+    [0.00, 68,1,84],
+    [0.13, 72,40,120],
+    [0.25, 62,74,137],
+    [0.38, 49,104,142],
+    [0.50, 38,130,142],
+    [0.63, 31,158,137],
+    [0.75, 53,183,121],
+    [0.88, 109,205,89],
+    [1.00, 253,231,37],
+  ];
+  function viridis(t){
+    t = Math.max(0, Math.min(1, t));
+    for (let i=0;i<VIRIDIS_STOPS.length-1;i++){
+      const [t0,r0,g0,b0] = VIRIDIS_STOPS[i];
+      const [t1,r1,g1,b1] = VIRIDIS_STOPS[i+1];
+      if (t >= t0 && t <= t1){
+        const f = (t-t0)/(t1-t0 || 1);
+        return [r0+(r1-r0)*f, g0+(g1-g0)*f, b0+(b1-b0)*f];
+      }
+    }
+    return VIRIDIS_STOPS[VIRIDIS_STOPS.length-1].slice(1);
+  }
+
+  function colorForIntensity(t, isBid){
+    // t: 0..1 (após escala log). Interpola cor base -> hot.
+    t = Math.max(0, Math.min(1, t));
+    const base = isBid ? [240,160,32] : [22,183,201];
+    const hot  = isBid ? [255,233,176] : [184,245,255];
+    const r = base[0] + (hot[0]-base[0])*t;
+    const g = base[1] + (hot[1]-base[1])*t;
+    const bch = base[2] + (hot[2]-base[2])*t;
+    const alpha = 0.10 + 0.85*t;
+    return `rgba(${r|0},${g|0},${bch|0},${alpha.toFixed(3)})`;
+  }
+
+  function buildCandles(bucketCols){
+    // agrupa state.history (1 coluna = 1s) em candles de `bucketCols` segundos,
+    // usando o mid price real como proxy de O/H/L/C.
+    const candles = [];
+    for (let i=0; i<state.history.length; i+=bucketCols){
+      const slice = state.history.slice(i, i+bucketCols);
+      if (slice.length === 0) continue;
+      const mids = slice.map(c => c.mid);
+      candles.push({
+        iStart: i, iEnd: i+slice.length-1,
+        o: mids[0], c: mids[mids.length-1],
+        h: Math.max(...mids), l: Math.min(...mids),
+      });
+    }
+    return candles;
+  }
+
+  function drawCandles(xOffset, colW, cols, hi, lo, plotH, rowH, rows){
+    const bucketCols = 5; // candle de 5s
+    const candles = buildCandles(bucketCols);
+    const yFor = p => ((hi-p)/(hi-lo)) * rows * rowH;
+
+    for (const cd of candles){
+      const xStart = xOffset + cd.iStart*colW;
+      const xEnd = xOffset + (cd.iEnd+1)*colW;
+      const cx = (xStart+xEnd)/2;
+      const bodyW = Math.max(1.5, (xEnd-xStart) * 0.6);
+      const up = cd.c >= cd.o;
+      const color = up ? 'var(--good)' : 'var(--bad)';
+      const resolved = up ? '#3ddc84' : '#ff5c5c';
+
+      ctx.strokeStyle = resolved;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, yFor(cd.h));
+      ctx.lineTo(cx, yFor(cd.l));
+      ctx.stroke();
+
+      const yO = yFor(cd.o), yC = yFor(cd.c);
+      const top = Math.min(yO,yC), h = Math.max(1, Math.abs(yC-yO));
+      ctx.fillStyle = resolved;
+      ctx.fillRect(cx-bodyW/2, top, bodyW, h);
+    }
+  }
+
+  function drawFirmWalls(plotW, plotH, hi, lo, rows, rowH){
+    const now = Date.now();
+    for (const w of state.wallTracker.values()){
+      const st = wallStatus(w);
+      if (st.label !== 'FIRME') continue;   // só renderiza paredes que já provaram persistência
+      if (w.price < lo || w.price > hi) continue;
+
+      const r = (hi - w.price) / (hi - lo) * rows;
+      const y = r * rowH;
+
+      // espessura do bloco proporcional ao tamanho da parede (mín. ~1 linha, máx. ~5)
+      const usd = w.price * w.qty;
+      const thickness = Math.min(5, Math.max(1.4, Math.log10(usd/1000))) * rowH;
+      const top = y - thickness/2;
+
+      const isBid = w.side === 'bid';
+      const core = isBid ? '#f0a020' : '#16b7c9';
+      const glow = isBid ? 'rgba(240,160,32,0.18)' : 'rgba(22,183,201,0.18)';
+
+      // halo suave
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, top-3, plotW, thickness+6);
+      // bloco sólido
+      ctx.fillStyle = core;
+      ctx.fillRect(0, top, plotW, Math.max(2, thickness));
+
+      // rótulo: preço · USDT · idade
+      const age = fmtAge(now - w.firstSeen);
+      const label = `${w.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}  ·  ${fmtUsd(usd)}  ·  ${age}`;
+      ctx.font = '600 11px JetBrains Mono, monospace';
+      const textW = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(10,13,18,0.75)';
+      ctx.fillRect(8, top - 16, textW+12, 15);
+      ctx.fillStyle = isBid ? '#ffe9b0' : '#b8f5ff';
+      ctx.fillText(label, 14, top - 5);
+    }
+  }
+
+  function draw(){
+    const rect = wrap.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    ctx.clearRect(0,0,W,H);
+
+    ctx.fillStyle = '#0a0d12';
+    ctx.fillRect(0,0,W,H);
+
+    if (state.history.length < 2 || state.lastMid <= 0){
+      ctx.fillStyle = '#6b7686';
+      ctx.font = '12px JetBrains Mono, monospace';
+      ctx.fillText('sincronizando order book…', 16, 24);
+      requestAnimationFrame(loop);
+      return;
+    }
+
+    const plotW = W - 60;   // reserva espaço p/ eixo de preço à direita
+    const plotH = H - 26;   // reserva espaço p/ eixo de tempo embaixo
+
+    const mid = state.lastMid;
+    const [lo, hi] = computeRange(mid);
+    const rows = CONFIG.rows;
+    const rowH = plotH / rows;
+    const priceForRow = r => hi - (r/rows) * (hi-lo);
+
+    const cols = state.history.length;
+    const colW = plotW / CONFIG.historyCols;
+    const xOffset = plotW - cols*colW; // alinha à direita, cresce p/ esquerda
+
+    // fundo neutro
+    ctx.fillStyle = 'rgba(20,26,36,0.55)';
+    ctx.fillRect(0,0,plotW,plotH);
+
+    // só os blocos de paredes que já provaram persistência (status FIRME)
+    drawFirmWalls(plotW, plotH, hi, lo, rows, rowH);
+
+    // candles sintéticos de preço (agrupando o histórico de mid em janelas de 5s)
+    drawCandles(xOffset, colW, cols, hi, lo, plotH, rowH, rows);
+
+    // liquidações: pings expansivos
+    const now = Date.now();
+    const t0 = state.history[0].t;
+    const tSpanMs = Math.max(1, now - t0);
+    for (const liq of state.liquidations){
+      const age = now - liq.t;
+      if (age > CONFIG.liqLifetimeMs) continue;
+      if (liq.price < lo || liq.price > hi) continue;
+      const xFrac = (liq.t - t0) / tSpanMs;
+      const x = xOffset + xFrac * (cols*colW);
+      const r = (hi-liq.price)/(hi-lo)*rows;
+      const y = r*rowH;
+      const lifeT = age / CONFIG.liqLifetimeMs;
+      const radius = 4 + lifeT*22;
+      const alpha = Math.max(0, 1-lifeT);
+      const color = liq.side === 'SELL' ? '255,61,129' : '160,107,255';
+      ctx.beginPath();
+      ctx.arc(x,y,radius,0,Math.PI*2);
+      ctx.strokeStyle = `rgba(${color},${alpha})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      if (lifeT < 0.25){
+        ctx.beginPath();
+        ctx.arc(x,y,3,0,Math.PI*2);
+        ctx.fillStyle = `rgba(${color},${alpha})`;
+        ctx.fill();
+      }
+    }
+
+    // linha do preço atual (best bid/ask) fixa na borda direita
+    const curR = (hi-mid)/(hi-lo)*rows;
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    ctx.moveTo(0, curR*rowH);
+    ctx.lineTo(plotW, curR*rowH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // eixo de preço (direita)
+    ctx.fillStyle = '#6b7686';
+    ctx.font = '11px JetBrains Mono, monospace';
+    ctx.textBaseline = 'middle';
+    const priceTicks = 7;
+    for (let k=0;k<=priceTicks;k++){
+      const r = (k/priceTicks)*rows;
+      const p = priceForRow(r);
+      const y = r*rowH;
+      ctx.fillText(p.toLocaleString('en-US',{maximumFractionDigits: p<10?4:2}), plotW+8, y);
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(plotW,y); ctx.stroke();
+    }
+
+    // eixo de tempo (embaixo)
+    ctx.textBaseline = 'alphabetic';
+    const timeTicks = 5;
+    for (let k=0;k<=timeTicks;k++){
+      const i = Math.floor((k/timeTicks)*(cols-1));
+      const col = state.history[i];
+      if (!col) continue;
+      const x = xOffset + i*colW;
+      const d = new Date(col.t);
+      const label = d.toLocaleTimeString('pt-BR', {hour12:false});
+      ctx.fillStyle = '#6b7686';
+      ctx.fillText(label, Math.min(Math.max(x,20), plotW-40), plotH+16);
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  let lastFrame = 0;
+  function loop(ts){
+    if (!lastFrame || ts - lastFrame >= CONFIG.renderIntervalMs){
+      lastFrame = ts;
+      draw();
+    } else {
+      requestAnimationFrame(loop);
+    }
+  }
+
+  // crosshair simples
+  wrap.addEventListener('mousemove', (e) => {
+    if (state.history.length < 2 || state.lastMid<=0) { crossBox.style.display='none'; return; }
+    const rect = wrap.getBoundingClientRect();
+    const plotH = rect.height - 26;
+    const mid = state.lastMid;
+    const [lo, hi] = computeRange(mid);
+    const y = e.clientY - rect.top;
+    const r = y/plotH*CONFIG.rows;
+    const price = hi - (r/CONFIG.rows)*(hi-lo);
+    crossBox.style.display = 'block';
+    crossBox.style.left = (e.clientX - rect.left + 14) + 'px';
+    crossBox.style.top = (e.clientY - rect.top - 10) + 'px';
+    crossBox.textContent = price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  });
+  wrap.addEventListener('mouseleave', () => crossBox.style.display='none');
+
+  // ---------------------------------------------------------------------
+  // Boot
+  // ---------------------------------------------------------------------
+  setInterval(captureColumn, CONFIG.captureIntervalMs);
+  resetAndConnect();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
